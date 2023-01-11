@@ -179,38 +179,45 @@ public class FindFRs3 {
 
         pairSup = new TreeMap<>();
 
-        for (int s = 0; s < numPaths; s++) {
-            if (s % 1000 == 0) {
-                System.out.println("processing path " + s);
+        int numMerges = 0;
+        do {
+            pairSup.clear();
+            for (int s = 0; s < numPaths; s++) {
+                if (s % 1000 == 0) {
+                    System.out.println("processing path " + s);
+                }
+                processPath(s);
             }
-            processPath(s);
-        }
-        ArrayList<Edge> merges = new ArrayList<>();
-        for (Integer A : pairSup.keySet()) {
-            for (Integer B : pairSup.get(A).keySet()) {
-                if (pairSup.get(A).get(B) >= minSup) {
-                    int a = A;
-                    int b = B;
-                    int sup = pairSup.get(A).get(B);
-                    Edge e = new Edge(a, b, sup);
-                    merges.add(e);
+            ArrayList<Edge> merges = new ArrayList<>();
+            for (Integer A : pairSup.keySet()) {
+                for (Integer B : pairSup.get(A).keySet()) {
+                    if (pairSup.get(A).get(B) >= minSup) {
+                        int a = A;
+                        int b = B;
+                        int sup = pairSup.get(A).get(B);
+                        Edge e = new Edge(a, b, sup);
+                        merges.add(e);
+                    }
                 }
             }
-        }
-        Edge[] temp = new Edge[0];
-        Edge[] m = merges.toArray(temp);
-        merges.clear();
-        Arrays.sort(m);
-        int numMerges = 0;
-        boolean[] marked = new boolean[numNodes];
-        for (int i = 0; i < m.length; i++) {
-            if (!marked[m[i].a] && !marked[m[i].b]) {
-                marked[m[i].a] = marked[m[i].b] = true;
-                union(m[i].a, m[i].b);
-                numMerges++;
-                //System.out.println(m[i].a + "-" + m[i].b + " : " + m[i].support);
+            Edge[] temp = new Edge[0];
+            Edge[] m = merges.toArray(temp);
+            merges.clear();
+            Arrays.sort(m);
+            numMerges = 0;
+            boolean[] marked = new boolean[numNodes];
+            for (int i = 0; i < m.length; i++) {
+                if (!marked[m[i].a] && !marked[m[i].b]) {
+                    marked[m[i].a] = marked[m[i].b] = true;
+                    union(m[i].a, m[i].b);
+                    numMerges++;
+                    if (i < 100) {
+                        System.out.println(m[i].a + "-" + m[i].b + " : " + m[i].support);
+                    }
+                }
             }
-        }
-        System.out.println("number of merges: " + numMerges);
+            System.out.println("number of merges: " + numMerges);
+
+        } while (numMerges > 0);
     }
 }
