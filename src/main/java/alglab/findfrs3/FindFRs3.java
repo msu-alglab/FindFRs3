@@ -1,20 +1,23 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Project/Maven2/JavaApp/src/main/java/${packagePath}/${mainClassName}.java to edit this template
- */
 package alglab.findfrs3;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import org.apache.commons.io.*;
 
 public class FindFRs3 {
 
+    static int k = 31;
     static double alpha = 0.5;
     static int minSup = 20;
 
@@ -25,8 +28,13 @@ public class FindFRs3 {
     static int numPaths = 0;
     static String[] seqName;
     static int[][] seqPath;
+    static int[][] seqPathStarts;
 
-    static TreeMap<Integer, TreeMap<Integer, Integer>> pairSup;
+    static ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, AtomicInteger>> pairSup;
+    static ConcurrentHashMap<Integer, AtomicInteger> sup;
+    static TreeSet<Integer> frSet;
+    static ConcurrentHashMap<Integer, ConcurrentLinkedQueue<int[]>> frSupPaths;
+    static int[][][][] frVarSup;
 
     // for union-find:
     static int[] parent;
@@ -112,37 +120,30 @@ public class FindFRs3 {
         }
     }
 
-    static void processPath(int s) {
+    static void processPathPairs(int s) {
         int[] path = seqPath[s];
-        int[] setPath = new int[path.length];
-        for (int i = 0; i < path.length; i++) {
-            setPath[i] = find(path[i]);
-        }
-        int a = -1, b = -1;
-        int aStart = 0, bStart = 0;
+        int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
         TreeSet<Integer> nodesSeen = new TreeSet<>();
-        for (int i = 0; i < setPath.length; i++) {
-            int nextSet = setPath[i];
+        for (int i = 0; i < path.length; i++) {
+            if (i < path.length) {
+                nextSet = find(path[i]);
+            }
             if (a == -1) {
                 a = nextSet;
                 aStart = i;
             } else if (b == -1) {
                 b = nextSet;
                 bStart = i;
-            } else if (nextSet != a && nextSet != b) {
+            }
+            if ((nextSet != a && nextSet != b) || i == path.length) {
                 nodesSeen.clear();
                 for (int j = aStart; j < i; j++) {
                     nodesSeen.add(path[j]);
                 }
                 if (nodesSeen.size() > alpha * (size[a] + size[b])) {
-                    //System.out.println(Math.min(a, b) + "-" + Math.max(a, b) + " supported by path " + s + "[" + aStart + "," + i + ")");
-                    if (!pairSup.containsKey(Math.min(a, b))) {
-                        pairSup.put(Math.min(a, b), new TreeMap<>());
-                    }
-                    if (!pairSup.get(Math.min(a, b)).containsKey(Math.max(a, b))) {
-                        pairSup.get(Math.min(a, b)).put(Math.max(a, b), 0);
-                    }
-                    pairSup.get(Math.min(a, b)).put(Math.max(a, b), pairSup.get(Math.min(a, b)).get(Math.max(a, b)) + 1);
+                    pairSup.putIfAbsent(Math.min(a, b), new ConcurrentHashMap<>());
+                    pairSup.get(Math.min(a, b)).putIfAbsent(Math.max(a, b), new AtomicInteger(0));
+                    pairSup.get(Math.min(a, b)).get(Math.max(a, b)).incrementAndGet();
                 }
                 a = b;
                 aStart = bStart;
@@ -150,51 +151,23 @@ public class FindFRs3 {
                 bStart = i;
             }
         }
-        if (b != -1) {
-            nodesSeen.clear();
-            for (int j = aStart; j < setPath.length; j++) {
-                nodesSeen.add(path[j]);
-            }
-            if (nodesSeen.size() > alpha * (size[a] + size[b])) {
-                //System.out.println(Math.min(a, b) + "-" + Math.max(a, b) + " supported by path " + s + "[" + aStart + "," + setPath.length + ")");
-                if (!pairSup.containsKey(Math.min(a, b))) {
-                    pairSup.put(Math.min(a, b), new TreeMap<>());
-                }
-                if (!pairSup.get(Math.min(a, b)).containsKey(Math.max(a, b))) {
-                    pairSup.get(Math.min(a, b)).put(Math.max(a, b), 0);
-                }
-                pairSup.get(Math.min(a, b)).put(Math.max(a, b), pairSup.get(Math.min(a, b)).get(Math.max(a, b)) + 1);
-            }
-        }
     }
 
-    public static void main(String[] args) {
-
-        nodeIDtoIndex = new HashMap<>();
-        readSeg();
-        System.out.println("numNodes: " + numNodes);
-
-        readSeq();
-        System.out.println("numPaths: " + numPaths);
-
-        pairSup = new TreeMap<>();
-
+    static void clusterNodes() {
+        pairSup = new ConcurrentHashMap<>();
         int numMerges = 0;
         do {
             pairSup.clear();
-            for (int s = 0; s < numPaths; s++) {
-                if (s % 1000 == 0) {
-                    System.out.println("processing path " + s);
-                }
-                processPath(s);
-            }
+            IntStream.range(0, numPaths).parallel().forEach(s -> {
+                processPathPairs(s);
+            });
             ArrayList<Edge> merges = new ArrayList<>();
             for (Integer A : pairSup.keySet()) {
                 for (Integer B : pairSup.get(A).keySet()) {
-                    if (pairSup.get(A).get(B) >= minSup) {
+                    if (pairSup.get(A).get(B).get() >= minSup) {
                         int a = A;
                         int b = B;
-                        int sup = pairSup.get(A).get(B);
+                        int sup = pairSup.get(A).get(B).get();
                         Edge e = new Edge(a, b, sup);
                         merges.add(e);
                     }
@@ -211,13 +184,171 @@ public class FindFRs3 {
                     marked[m[i].a] = marked[m[i].b] = true;
                     union(m[i].a, m[i].b);
                     numMerges++;
-                    if (i < 100) {
-                        System.out.println(m[i].a + "-" + m[i].b + " : " + m[i].support);
-                    }
                 }
             }
             System.out.println("number of merges: " + numMerges);
-
         } while (numMerges > 0);
+    }
+
+    static void processPathSupport(int s) {
+        int[] path = seqPath[s];
+        int a = -1, aStart = 0, nextSet = -1;
+        TreeSet<Integer> nodesSeen = new TreeSet<>();
+        for (int i = 0; i <= path.length; i++) {
+            if (i < path.length) {
+                nextSet = find(path[i]);
+            }
+            if (a == -1) {
+                a = nextSet;
+                aStart = i;
+            }
+            if (nextSet != a || i == path.length) {
+                nodesSeen.clear();
+                for (int j = aStart; j < i; j++) {
+                    nodesSeen.add(path[j]);
+                }
+                if (nodesSeen.size() > alpha * size[a]) {
+                    sup.putIfAbsent(a, new AtomicInteger(0));
+                    sup.get(a).incrementAndGet();
+                }
+                a = nextSet;
+                aStart = i;
+            }
+        }
+    }
+
+    static void processPathFindFRSupport(int s) {
+        int[] path = seqPath[s];
+        int a = -1, aStart = 0, nextSet = -1;
+        TreeSet<Integer> nodesSeen = new TreeSet<>();
+        for (int i = 0; i < path.length; i++) {
+            if (i < path.length) {
+                nextSet = find(path[i]);
+            }
+            if (a == -1) {
+                a = nextSet;
+                aStart = i;
+            }
+            if ((nextSet != a || i == path.length)) {
+                if (frSet.contains(a)) {
+                    nodesSeen.clear();
+                    for (int j = aStart; j < i; j++) {
+                        nodesSeen.add(path[j]);
+                    }
+                    if (nodesSeen.size() > alpha * size[a]) {
+                        frSupPaths.putIfAbsent(a, new ConcurrentLinkedQueue<>());
+                        int[] subpath = new int[3];
+                        subpath[0] = s;
+                        subpath[1] = aStart;
+                        subpath[2] = i;
+                        frSupPaths.get(a).add(subpath);
+                    }
+                }
+                a = nextSet;
+                aStart = i;
+            }
+        }
+    }
+
+    static void findFRs() {
+        sup = new ConcurrentHashMap<>();
+        IntStream.range(0, numPaths).parallel().forEach(s -> {
+            processPathSupport(s);
+        });
+        frSet = new TreeSet<>();
+        for (Integer I : sup.keySet()) {
+            if (sup.get(I).get() >= minSup) {
+                frSet.add(I);
+            }
+        }
+        sup.clear();
+        frSupPaths = new ConcurrentHashMap<>();
+        IntStream.range(0, numPaths).parallel().forEach(s -> {
+            processPathFindFRSupport(s);
+        });
+    }
+
+    static void findFRVariants() {
+        TreeMap<String, ArrayList<int[]>> variants = new TreeMap<>();
+        int frNum = 0;
+        int[] temp = new int[3];
+        frVarSup = new int[frSet.size()][][][];
+        for (Integer I : frSet) {
+            variants.clear();
+            for (int[] subpath : frSupPaths.get(I)) {
+                String s = "";
+                for (int j = subpath[1]; j < subpath[2]; j++) {
+                    s += " " + seqPath[subpath[0]][j];
+                }
+                variants.putIfAbsent(s, new ArrayList<>());
+                variants.get(s).add(subpath);
+            }
+            frVarSup[frNum] = new int[variants.keySet().size()][][];
+            int v = 0;
+
+            for (String s : variants.keySet()) {
+                ArrayList<int[]> A = variants.get(s);
+                frVarSup[frNum][v] = new int[A.size()][];
+                int j = 0;
+                for (int[] subpath : A) {
+                    frVarSup[frNum][v][j] = subpath;
+                    j++;
+                }
+                v++;
+            }
+            frNum++;
+        }
+        frSet.clear();
+        frSupPaths.clear();
+
+    }
+
+    static void outputBED() {
+        seqPathStarts = new int[numPaths][];
+        for (int s = 0; s < numPaths; s++) {
+            seqPathStarts[s] = new int[seqPath[s].length];
+            int start = 0;
+            for (int i = 0; i < seqPath[s].length; i++) {
+                seqPathStarts[s][i] = start;
+                start += nodeLength[seqPath[s][i]] - (k - 1);
+            }
+        }
+
+        System.out.println("writing bed file");
+        try {
+            BufferedWriter bedOut = new BufferedWriter(new FileWriter("yeast.k31.a0.5m20.bed"));
+            for (int fr = 0; fr < frVarSup.length; fr++) {
+                for (int v = 0; v < frVarSup[fr].length; v++) {
+                    for (int i = 0; i < frVarSup[fr][v].length; i++) {
+                        int path = frVarSup[fr][v][i][0];
+                        int start = seqPathStarts[path][frVarSup[fr][v][i][1]];
+                        int stop = seqPathStarts[path][frVarSup[fr][v][i][2] - 1] + nodeLength[seqPath[path][frVarSup[fr][v][i][2] - 1]];
+                        bedOut.write(seqName[path] // chrom
+                                + "\t" + start // chromStart (starts with 0)
+                                + "\t" + stop // chromEnd
+                                + "\tfr" + fr + ":" + v // fr variant
+                                + "\n");
+                    }
+                }
+            }
+            bedOut.close();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+
+        nodeIDtoIndex = new HashMap<>();
+        readSeg();
+        System.out.println("numNodes: " + numNodes);
+
+        readSeq();
+        System.out.println("numPaths: " + numPaths);
+
+        clusterNodes();
+        findFRs();
+        findFRVariants();
+        outputBED();
     }
 }
