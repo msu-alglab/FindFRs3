@@ -14,12 +14,16 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import org.apache.commons.io.*;
+import org.apache.commons.cli.*;
 
 public class FindFRs3 {
 
     static int k = 31;
     static double alpha = 0.5;
     static int minSup = 20;
+    static String segFile = "";
+    static String seqFile = "";
+    static String bedFile = "";
 
     static HashMap<Integer, Integer> nodeIDtoIndex;
     static int numNodes = 0;
@@ -34,7 +38,7 @@ public class FindFRs3 {
     static ConcurrentHashMap<Integer, AtomicInteger> sup;
     static TreeSet<Integer> frSet;
     static ConcurrentHashMap<Integer, ConcurrentLinkedQueue<int[]>> frSupPaths;
-    static int[][][][] frVarSup;
+    static Variant[][] frVarSup;
 
     // for union-find:
     static int[] parent;
@@ -55,10 +59,11 @@ public class FindFRs3 {
     }
 
     static void readSeg() {
+        nodeIDtoIndex = new HashMap<>();
         HashMap<Integer, Integer> nodeIDtoLength = new HashMap<Integer, Integer>();
         HashMap<Integer, Integer> indextoNodeID = new HashMap<Integer, Integer>();
         try {
-            LineIterator it = FileUtils.lineIterator(new File("yeast.k31.gfa3.cf_seg"), "UTF-8");
+            LineIterator it = FileUtils.lineIterator(new File(segFile), "UTF-8");
             try {
                 while (it.hasNext()) {
                     String line = it.nextLine();
@@ -74,6 +79,7 @@ public class FindFRs3 {
                 LineIterator.closeQuietly(it);
             }
         } catch (IOException ex) {
+            System.out.println(ex);
         }
         nodeLength = new int[numNodes];
         parent = new int[numNodes];
@@ -90,7 +96,7 @@ public class FindFRs3 {
         HashMap<Integer, String> indexSeq = new HashMap<Integer, String>();
         HashMap<Integer, int[]> indexPath = new HashMap<Integer, int[]>();
         try {
-            LineIterator it = FileUtils.lineIterator(new File("yeast.k31.gfa3.cf_seq"), "UTF-8");
+            LineIterator it = FileUtils.lineIterator(new File(seqFile), "UTF-8");
             try {
                 while (it.hasNext()) {
                     String line = it.nextLine();
@@ -272,7 +278,7 @@ public class FindFRs3 {
         TreeMap<String, ArrayList<int[]>> variants = new TreeMap<>();
         int frNum = 0;
         int[] temp = new int[3];
-        frVarSup = new int[frSet.size()][][][];
+        frVarSup = new Variant[frSet.size()][];
         for (Integer I : frSet) {
             variants.clear();
             for (int[] subpath : frSupPaths.get(I)) {
@@ -283,24 +289,24 @@ public class FindFRs3 {
                 variants.putIfAbsent(s, new ArrayList<>());
                 variants.get(s).add(subpath);
             }
-            frVarSup[frNum] = new int[variants.keySet().size()][][];
+            frVarSup[frNum] = new Variant[variants.keySet().size()];
             int v = 0;
 
             for (String s : variants.keySet()) {
                 ArrayList<int[]> A = variants.get(s);
-                frVarSup[frNum][v] = new int[A.size()][];
+                frVarSup[frNum][v] = new Variant(new int[A.size()][]);
                 int j = 0;
                 for (int[] subpath : A) {
-                    frVarSup[frNum][v][j] = subpath;
+                    frVarSup[frNum][v].subpaths[j] = subpath;
                     j++;
                 }
                 v++;
             }
+            Arrays.sort(frVarSup[frNum]);
             frNum++;
         }
         frSet.clear();
         frSupPaths.clear();
-
     }
 
     static void outputBED() {
@@ -316,13 +322,13 @@ public class FindFRs3 {
 
         System.out.println("writing bed file");
         try {
-            BufferedWriter bedOut = new BufferedWriter(new FileWriter("yeast.k31.a0.5m20.bed"));
+            BufferedWriter bedOut = new BufferedWriter(new FileWriter(bedFile));
             for (int fr = 0; fr < frVarSup.length; fr++) {
                 for (int v = 0; v < frVarSup[fr].length; v++) {
-                    for (int i = 0; i < frVarSup[fr][v].length; i++) {
-                        int path = frVarSup[fr][v][i][0];
-                        int start = seqPathStarts[path][frVarSup[fr][v][i][1]];
-                        int stop = seqPathStarts[path][frVarSup[fr][v][i][2] - 1] + nodeLength[seqPath[path][frVarSup[fr][v][i][2] - 1]];
+                    for (int i = 0; i < frVarSup[fr][v].subpaths.length; i++) {
+                        int path = frVarSup[fr][v].subpaths[i][0];
+                        int start = seqPathStarts[path][frVarSup[fr][v].subpaths[i][1]];
+                        int stop = seqPathStarts[path][frVarSup[fr][v].subpaths[i][2] - 1] + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2] - 1]];
                         bedOut.write(seqName[path] // chrom
                                 + "\t" + start // chromStart (starts with 0)
                                 + "\t" + stop // chromEnd
@@ -338,17 +344,60 @@ public class FindFRs3 {
     }
 
     public static void main(String[] args) {
+        Options options = new Options();
 
-        nodeIDtoIndex = new HashMap<>();
-        readSeg();
-        System.out.println("numNodes: " + numNodes);
+        Option segO = new Option("n", "seg", true, "GFA3 seg file");
+        segO.setRequired(true);
+        options.addOption(segO);
 
-        readSeq();
-        System.out.println("numPaths: " + numPaths);
+        Option seqO = new Option("p", "seq", true, "GFA3 seq file");
+        seqO.setRequired(true);
+        options.addOption(seqO);
 
-        clusterNodes();
-        findFRs();
-        findFRVariants();
-        outputBED();
+        Option bedO = new Option("b", "bed", true, "BED output file");
+        bedO.setRequired(true);
+        options.addOption(bedO);
+
+        Option aO = new Option("a", "alpha", true, "alpha parameter");
+        aO.setRequired(true);
+        options.addOption(aO);
+
+        Option kO = new Option("k", "kmer", true, "k-mer size");
+        kO.setRequired(true);
+        options.addOption(kO);
+
+        Option minSO = new Option("m", "minsup", true, "minsup parameter");
+        minSO.setRequired(true);
+        options.addOption(minSO);
+
+        HelpFormatter formatter = new HelpFormatter();
+        try {
+            CommandLineParser parser = new DefaultParser();
+
+            CommandLine cmd = parser.parse(options, args);
+
+            segFile = cmd.getOptionValue("seg");
+            seqFile = cmd.getOptionValue("seq");
+            bedFile = cmd.getOptionValue("bed");
+            alpha = Double.parseDouble(cmd.getOptionValue("alpha"));
+            k = Integer.parseInt(cmd.getOptionValue("kmer"));
+            minSup = Integer.parseInt(cmd.getOptionValue("minsup"));
+
+            readSeg();
+            System.out.println("numNodes: " + numNodes);
+            readSeq();
+            System.out.println("numPaths: " + numPaths);
+
+            clusterNodes();
+            findFRs();
+            findFRVariants();
+            outputBED();
+
+        } catch (ParseException e) {
+            System.out.println(e.getMessage());
+            formatter.printHelp("FindFRs", options);
+            System.exit(0);
+        }
+
     }
 }
