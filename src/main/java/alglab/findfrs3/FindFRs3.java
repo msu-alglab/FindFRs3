@@ -21,6 +21,7 @@ public class FindFRs3 {
     static int k = 31;
     static double alpha = 0.5;
     static int minSup = 20;
+    static int minAvgLen = 0;
     static String segFile = "";
     static String seqFile = "";
     static String bedFile = "";
@@ -28,15 +29,21 @@ public class FindFRs3 {
     static HashMap<Integer, Integer> nodeIDtoIndex;
     static int numNodes = 0;
     static int[] nodeLength;
+    //static int[] nodetoNodeID;
 
     static int numPaths = 0;
     static String[] seqName;
     static int[][] seqPath;
-    static int[][] seqPathStarts;
+    static boolean[][] seqStrand;
+    //static int[][] seqStarts;
+    static int[][] sampledStarts;
+    static final int factor = 20;
 
     static ConcurrentHashMap<Integer, ConcurrentHashMap<Integer, AtomicInteger>> pairSup;
     static ConcurrentHashMap<Integer, AtomicInteger> sup;
+    static ConcurrentHashMap<Integer, AtomicInteger> len;
     static TreeSet<Integer> frSet;
+    static FR[] frsFound;
     static ConcurrentHashMap<Integer, ConcurrentLinkedQueue<int[]>> frSupPaths;
     static Variant[][] frVarSup;
 
@@ -60,15 +67,15 @@ public class FindFRs3 {
 
     static void readSeg() {
         nodeIDtoIndex = new HashMap<>();
-        HashMap<Integer, Integer> nodeIDtoLength = new HashMap<Integer, Integer>();
-        HashMap<Integer, Integer> indextoNodeID = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> nodeIDtoLength = new HashMap<>();
+        HashMap<Integer, Integer> indextoNodeID = new HashMap<>();
         try {
             LineIterator it = FileUtils.lineIterator(new File(segFile), "UTF-8");
             try {
                 while (it.hasNext()) {
                     String line = it.nextLine();
                     String[] lineSplit = line.split("\t");
-                    int nodeID = Integer.parseInt(lineSplit[0]);
+                    int nodeID = Integer.parseUnsignedInt(lineSplit[0]);
                     int length = lineSplit[1].length();
                     indextoNodeID.put(numNodes, nodeID);
                     nodeIDtoIndex.put(nodeID, numNodes);
@@ -82,19 +89,24 @@ public class FindFRs3 {
             System.out.println(ex);
         }
         nodeLength = new int[numNodes];
+        //nodetoNodeID = new int[numNodes];
         parent = new int[numNodes];
         size = new int[numNodes];
 
         for (int i = 0; i < numNodes; i++) {
             nodeLength[i] = nodeIDtoLength.get(indextoNodeID.get(i));
+            //nodetoNodeID[i] = indextoNodeID.get(i);
             parent[i] = i;
             size[i] = 1;
         }
+        nodeIDtoLength.clear();
+        indextoNodeID.clear();
     }
 
     static void readSeq() {
-        HashMap<Integer, String> indexSeq = new HashMap<Integer, String>();
-        HashMap<Integer, int[]> indexPath = new HashMap<Integer, int[]>();
+        HashMap<Integer, String> indexSeq = new HashMap<>();
+        HashMap<Integer, int[]> indexPath = new HashMap<>();
+        HashMap<Integer, boolean[]> indexStrand = new HashMap<>();
         try {
             LineIterator it = FileUtils.lineIterator(new File(seqFile), "UTF-8");
             try {
@@ -104,12 +116,19 @@ public class FindFRs3 {
                     String seq = lineSplit[0].split(":")[2];
                     String[] pathStr = lineSplit[1].split(" ");
                     int[] path = new int[pathStr.length];
+                    boolean[] strand = new boolean[pathStr.length];
                     for (int i = 0; i < pathStr.length; i++) {
-                        int node = Integer.parseInt(pathStr[i].substring(0, pathStr[i].length() - 1));
-                        path[i] = nodeIDtoIndex.get(node);
+                        int nodeID = Integer.parseUnsignedInt(pathStr[i].substring(0, pathStr[i].length() - 1));
+                        if (! nodeIDtoIndex.containsKey(nodeID)) {
+                            System.out.println("node " + Integer.toUnsignedString(nodeID) + " in seg file not found in seq file, exiting");
+                            System.exit(-1);
+                        }
+                        path[i] = nodeIDtoIndex.get(nodeID);
+                        strand[i] = pathStr[i].charAt(pathStr[i].length() - 1) == '+';
                     }
                     indexSeq.put(numPaths, seq);
                     indexPath.put(numPaths, path);
+                    indexStrand.put(numPaths, strand);
                     numPaths++;
                 }
             } finally {
@@ -120,9 +139,11 @@ public class FindFRs3 {
         nodeIDtoIndex.clear();
         seqName = new String[numPaths];
         seqPath = new int[numPaths][];
+        seqStrand = new boolean[numPaths][];
         for (int i = 0; i < numPaths; i++) {
             seqName[i] = indexSeq.get(i);
             seqPath[i] = indexPath.get(i);
+            seqStrand[i] = indexStrand.get(i);
         }
     }
 
@@ -216,6 +237,8 @@ public class FindFRs3 {
                 if (nodesSeen.size() > alpha * size[a]) {
                     sup.putIfAbsent(a, new AtomicInteger(0));
                     sup.get(a).incrementAndGet();
+                    len.putIfAbsent(a, new AtomicInteger(0));
+                    len.get(a).addAndGet(getStart(s, i) - getStart(s, aStart));
                 }
                 a = nextSet;
                 aStart = i;
@@ -258,33 +281,46 @@ public class FindFRs3 {
 
     static void findFRs() {
         sup = new ConcurrentHashMap<>();
+        len = new ConcurrentHashMap<>();
         IntStream.range(0, numPaths).parallel().forEach(s -> {
             processPathSupport(s);
         });
+        ArrayList<FR> frList = new ArrayList<>();
         frSet = new TreeSet<>();
         for (Integer I : sup.keySet()) {
-            if (sup.get(I).get() >= minSup) {
+            if (sup.get(I).get() >= minSup
+                    && len.get(I).get() / sup.get(I).get() >= minAvgLen) {
                 frSet.add(I);
+                frList.add(new FR(I, sup.get(I).get()));
             }
         }
         sup.clear();
+        len.clear();
+        FR[] temp = new FR[0];
+        frsFound = frList.toArray(temp);
+        Arrays.sort(frsFound);
         frSupPaths = new ConcurrentHashMap<>();
         IntStream.range(0, numPaths).parallel().forEach(s -> {
             processPathFindFRSupport(s);
         });
+        frSet.clear();
     }
 
     static void findFRVariants() {
         TreeMap<String, ArrayList<int[]>> variants = new TreeMap<>();
         int frNum = 0;
         int[] temp = new int[3];
-        frVarSup = new Variant[frSet.size()][];
-        for (Integer I : frSet) {
+        frVarSup = new Variant[frsFound.length][];
+        for (int i = 0; i < frsFound.length; i++) {
             variants.clear();
-            for (int[] subpath : frSupPaths.get(I)) {
+            for (int[] subpath : frSupPaths.get(frsFound[i].node)) {
                 String s = "";
                 for (int j = subpath[1]; j < subpath[2]; j++) {
-                    s += " " + seqPath[subpath[0]][j];
+                    char strand = '-';
+                    if (seqStrand[subpath[0]][j]) {
+                        strand = '+';
+                    }
+                    s += seqPath[subpath[0]][j] + strand;
                 }
                 variants.putIfAbsent(s, new ArrayList<>());
                 variants.get(s).add(subpath);
@@ -309,16 +345,44 @@ public class FindFRs3 {
         frSupPaths.clear();
     }
 
-    static void outputBED() {
-        seqPathStarts = new int[numPaths][];
+    static void sampleStarts() {
+        sampledStarts = new int[numPaths][];
         for (int s = 0; s < numPaths; s++) {
-            seqPathStarts[s] = new int[seqPath[s].length];
+            sampledStarts[s] = new int[seqPath[s].length / factor + 1];
             int start = 0;
             for (int i = 0; i < seqPath[s].length; i++) {
-                seqPathStarts[s][i] = start;
+                if (i % factor == 0) {
+                    sampledStarts[s][i / factor] = start; // store every factor-th start
+                }
                 start += nodeLength[seqPath[s][i]] - (k - 1);
             }
         }
+    }
+
+    static int getStart(int s, int index) {
+        int last = index / factor;
+        int start = sampledStarts[s][last];
+        int i = last * factor;
+        while (i < index) {
+            start += nodeLength[seqPath[s][i]] - (k - 1);
+            i++;
+        }
+//        if (start != seqStarts[s][index]) {
+//            System.out.println("here");
+//        }
+        return start;
+    }
+
+    static void outputBED() {
+//        seqStarts = new int[numPaths][];
+//        for (int s = 0; s < numPaths; s++) {
+//            seqStarts[s] = new int[seqPath[s].length];
+//            int start = 0;
+//            for (int i = 0; i < seqPath[s].length; i++) {
+//                seqStarts[s][i] = start;
+//                start += nodeLength[seqPath[s][i]] - (k - 1);
+//            }
+//        }
 
         System.out.println("writing bed file");
         try {
@@ -327,8 +391,10 @@ public class FindFRs3 {
                 for (int v = 0; v < frVarSup[fr].length; v++) {
                     for (int i = 0; i < frVarSup[fr][v].subpaths.length; i++) {
                         int path = frVarSup[fr][v].subpaths[i][0];
-                        int start = seqPathStarts[path][frVarSup[fr][v].subpaths[i][1]];
-                        int stop = seqPathStarts[path][frVarSup[fr][v].subpaths[i][2] - 1] + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2] - 1]];
+                        //int start = seqStarts[path][frVarSup[fr][v].subpaths[i][1]];
+                        int start = getStart(path, frVarSup[fr][v].subpaths[i][1]);
+                        //int stop = seqStarts[path][frVarSup[fr][v].subpaths[i][2] - 1] + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2] - 1]];
+                        int stop = getStart(path, frVarSup[fr][v].subpaths[i][2] - 1) + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2] - 1]];
                         bedOut.write(seqName[path] // chrom
                                 + "\t" + start // chromStart (starts with 0)
                                 + "\t" + stop // chromEnd
@@ -343,6 +409,31 @@ public class FindFRs3 {
         }
     }
 
+//    static void outputFRVariants() {
+//        System.out.println("writing FR variants file");
+//        try {
+//            BufferedWriter frvOut = new BufferedWriter(new FileWriter(bedFile + ".frv"));
+//            for (int fr = 0; fr < frVarSup.length; fr++) {
+//                for (int v = 0; v < frVarSup[fr].length; v++) {
+//                    int path = frVarSup[fr][v].subpaths[0][0];
+//
+//                    frvOut.write("fr" + fr + ":" + v + "\t");
+//                    for (int i = frVarSup[fr][v].subpaths[0][1]; i < frVarSup[fr][v].subpaths[0][2]; i++) {
+//                        char strand = '-';
+//                        if (seqStrand[path][i]) {
+//                            strand = '+';
+//                        }
+//                        frvOut.write(" " + Integer.toUnsignedString(nodetoNodeID[seqPath[path][i]]) + strand);
+//                    }
+//                    frvOut.write("\n");
+//                }
+//
+//            }
+//            frvOut.close();
+//        } catch (IOException ex) {
+//            ex.printStackTrace();
+//        }
+//    }
     public static void main(String[] args) {
         Options options = new Options();
 
@@ -366,9 +457,13 @@ public class FindFRs3 {
         kO.setRequired(true);
         options.addOption(kO);
 
-        Option minSO = new Option("m", "minsup", true, "minsup parameter");
+        Option minSO = new Option("m", "minsup", true, "min support parameter");
         minSO.setRequired(true);
         options.addOption(minSO);
+
+        Option minLO = new Option("l", "minlen", true, "min avg support length parameter (bp)");
+        minLO.setRequired(false);
+        options.addOption(minLO);
 
         HelpFormatter formatter = new HelpFormatter();
         try {
@@ -382,20 +477,24 @@ public class FindFRs3 {
             alpha = Double.parseDouble(cmd.getOptionValue("alpha"));
             k = Integer.parseInt(cmd.getOptionValue("kmer"));
             minSup = Integer.parseInt(cmd.getOptionValue("minsup"));
+            if (options.hasLongOption("minlen")) {
+                minAvgLen = Integer.parseInt(cmd.getOptionValue("minlen"));
+            }
 
             readSeg();
             System.out.println("numNodes: " + numNodes);
             readSeq();
             System.out.println("numPaths: " + numPaths);
-
+            sampleStarts();
             clusterNodes();
             findFRs();
             findFRVariants();
             outputBED();
+            //outputFRVariants();
 
         } catch (ParseException e) {
             System.out.println(e.getMessage());
-            formatter.printHelp("FindFRs", options);
+            formatter.printHelp("FindFRs3", options);
             System.exit(0);
         }
 
