@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,6 +21,7 @@ public class FindFRs3 {
 
     static int k = 31;
     static double alpha = 0.5;
+    static int kappa = 0;
     static int minSup = 20;
     static int minAvgLen = 0;
     static String segFile = "";
@@ -119,7 +121,7 @@ public class FindFRs3 {
                     boolean[] strand = new boolean[pathStr.length];
                     for (int i = 0; i < pathStr.length; i++) {
                         int nodeID = Integer.parseUnsignedInt(pathStr[i].substring(0, pathStr[i].length() - 1));
-                        if (! nodeIDtoIndex.containsKey(nodeID)) {
+                        if (!nodeIDtoIndex.containsKey(nodeID)) {
                             System.out.println("node " + Integer.toUnsignedString(nodeID) + " in seg file not found in seq file, exiting");
                             System.exit(-1);
                         }
@@ -147,11 +149,63 @@ public class FindFRs3 {
         }
     }
 
+    static void processPathPair(int s, int a, int b) {
+        int[] path = seqPath[s];
+        int nextSet = -1, start = -1;
+        int d = 0; // distance back to {a,b}
+        TreeSet<Integer> nodesSeen = new TreeSet<>();
+
+        for (int i = 0; i <= path.length; i++) {
+            if (i < path.length) {
+                nextSet = find(path[i]);
+            }
+            if (nextSet == a || nextSet == b) {
+                d = 0;
+                if (start == -1) {
+                    start = i;
+                }
+            } else {
+                d++;
+            }
+            if (start != -1 && (d > kappa || i == path.length)) {
+                nodesSeen.clear();
+                for (int j = start; j < i - d; j++) {
+                    if (find(path[j]) == a || find(path[j]) == b) {
+                        nodesSeen.add(path[j]);
+                    }
+                }
+                if (nodesSeen.size() > alpha * (size[a] + size[b])) {
+                    pairSup.putIfAbsent(Math.min(a, b), new ConcurrentHashMap<>());
+                    pairSup.get(Math.min(a, b)).putIfAbsent(Math.max(a, b), new AtomicInteger(0));
+                    pairSup.get(Math.min(a, b)).get(Math.max(a, b)).incrementAndGet();
+                }
+                start = -1;
+            }
+        }
+    }
+
+    static void processPathPairsNew(int s) {
+        int[] path = seqPath[s];
+        //int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
+        HashMap<Integer, HashSet<Integer>> pairs = new HashMap<>();
+        for (int i = 0; i < path.length - (kappa + 1); i++) {
+            for (int j = i + 1; j <= i + kappa + 1; j++) {
+                pairs.putIfAbsent(Math.min(find(path[i]), find(path[j])), new HashSet<>());
+                pairs.get(Math.min(find(path[i]), find(path[j]))).add(Math.max(find(path[i]), find(path[j])));
+            }
+        }
+        for (Integer A : pairs.keySet()) {
+            for (Integer B : pairs.get(A)) {
+                processPathPair(s, A, B);
+            }
+        }
+    }
+
     static void processPathPairs(int s) {
         int[] path = seqPath[s];
         int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
         TreeSet<Integer> nodesSeen = new TreeSet<>();
-        for (int i = 0; i < path.length; i++) {
+        for (int i = 0; i <= path.length; i++) {
             if (i < path.length) {
                 nextSet = find(path[i]);
             }
@@ -186,7 +240,7 @@ public class FindFRs3 {
         do {
             pairSup.clear();
             IntStream.range(0, numPaths).parallel().forEach(s -> {
-                processPathPairs(s);
+                processPathPairsNew(s);
             });
             ArrayList<Edge> merges = new ArrayList<>();
             for (Integer A : pairSup.keySet()) {
@@ -250,7 +304,7 @@ public class FindFRs3 {
         int[] path = seqPath[s];
         int a = -1, aStart = 0, nextSet = -1;
         TreeSet<Integer> nodesSeen = new TreeSet<>();
-        for (int i = 0; i < path.length; i++) {
+        for (int i = 0; i <= path.length; i++) {
             if (i < path.length) {
                 nextSet = find(path[i]);
             }
@@ -477,7 +531,7 @@ public class FindFRs3 {
             alpha = Double.parseDouble(cmd.getOptionValue("alpha"));
             k = Integer.parseInt(cmd.getOptionValue("kmer"));
             minSup = Integer.parseInt(cmd.getOptionValue("minsup"));
-            if (options.hasLongOption("minlen")) {
+            if (cmd.hasOption("minlen")) {
                 minAvgLen = Integer.parseInt(cmd.getOptionValue("minlen"));
             }
 
