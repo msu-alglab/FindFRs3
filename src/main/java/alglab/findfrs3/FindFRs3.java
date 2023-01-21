@@ -149,99 +149,171 @@ public class FindFRs3 {
         }
     }
 
-    static void processPathPair(int s, int a, int b) {
+//    static void processPathPair(int s, int a, int b) {
+//        int[] path = seqPath[s];
+//        int nextSet = -1, start = -1;
+//        int d = 0; // distance back to {a,b}
+//        TreeSet<Integer> nodesSeen = new TreeSet<>();
+//
+//        for (int i = 0; i <= path.length; i++) {
+//            if (i < path.length) {
+//                nextSet = find(path[i]);
+//            }
+//            if (nextSet == a || nextSet == b) {
+//                d = 0;
+//                if (start == -1) {
+//                    start = i;
+//                }
+//            } else {
+//                d++;
+//            }
+//            if (start != -1 && (d > kappa || i == path.length)) {
+//                nodesSeen.clear();
+//                for (int j = start; j < i - d; j++) {
+//                    if (find(path[j]) == a || find(path[j]) == b) {
+//                        nodesSeen.add(path[j]);
+//                    }
+//                }
+//                if (nodesSeen.size() > alpha * (size[a] + size[b])) {
+//                    pairSup.putIfAbsent(Math.min(a, b), new ConcurrentHashMap<>());
+//                    pairSup.get(Math.min(a, b)).putIfAbsent(Math.max(a, b), new AtomicInteger(0));
+//                    pairSup.get(Math.min(a, b)).get(Math.max(a, b)).incrementAndGet();
+//                }
+//                start = -1;
+//            }
+//        }
+//    }
+//    static void processPathPairsNew(int s) {
+//        int[] path = seqPath[s];
+//        //int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
+//        HashMap<Integer, HashSet<Integer>> pairs = new HashMap<>();
+//        for (int i = 0; i < path.length - (kappa + 1); i++) {
+//            for (int j = i + 1; j <= i + kappa + 1; j++) {
+//                pairs.putIfAbsent(Math.min(find(path[i]), find(path[j])), new HashSet<>());
+//                pairs.get(Math.min(find(path[i]), find(path[j]))).add(Math.max(find(path[i]), find(path[j])));
+//            }
+//        }
+//        for (Integer A : pairs.keySet()) {
+//            for (Integer B : pairs.get(A)) {
+//                processPathPair(s, A, B);
+//            }
+//        }
+//    }
+    static void processPathPairs2(int s) {
         int[] path = seqPath[s];
-        int nextSet = -1, start = -1;
-        int d = 0; // distance back to {a,b}
+        HashMap<Integer, HashMap<Integer, Integer>> starts = new HashMap<>();
+        HashMap<Integer, HashMap<Integer, Integer>> d = new HashMap<>(); // distance back to {a,b}
         TreeSet<Integer> nodesSeen = new TreeSet<>();
-
-        for (int i = 0; i <= path.length; i++) {
-            if (i < path.length) {
-                nextSet = find(path[i]);
-            }
-            if (nextSet == a || nextSet == b) {
-                d = 0;
-                if (start == -1) {
-                    start = i;
+        TreeSet<Integer> singles = new TreeSet<>();
+        TreeMap<Integer, TreeSet<Integer>> ABremove = new TreeMap<>();
+        for (int i = 0; i < path.length; i++) {
+            int nextSet = find(path[i]);
+            singles.clear();
+            for (Integer A : d.keySet()) {
+                if (d.get(A).containsKey(A)) {
+                    singles.add(A);
                 }
-            } else {
-                d++;
             }
-            if (start != -1 && (d > kappa || i == path.length)) {
-                nodesSeen.clear();
-                for (int j = start; j < i - d; j++) {
-                    if (find(path[j]) == a || find(path[j]) == b) {
-                        nodesSeen.add(path[j]);
+            for (Integer S : singles) {
+                Integer Min = Integer.min(S, nextSet);
+                Integer Max = Integer.max(S, nextSet);
+                d.putIfAbsent(Min, new HashMap<>());
+                d.get(Min).putIfAbsent(Max, 0);
+                starts.putIfAbsent(Min, new HashMap<>());
+                starts.get(Min).putIfAbsent(Max, starts.get(S).get(S));
+            }
+            d.putIfAbsent(nextSet, new HashMap<>());
+            d.get(nextSet).putIfAbsent(nextSet, 0);
+            starts.putIfAbsent(nextSet, new HashMap<>());
+            starts.get(nextSet).putIfAbsent(nextSet, i);
+
+            ABremove.clear();
+            for (Integer A : d.keySet()) {
+                for (Integer B : d.get(A).keySet()) {
+                    if (A.equals(nextSet) || B.equals(nextSet)) {
+                        d.get(A).put(B, 0); // reset d
+                    } else {
+                        d.get(A).put(B, d.get(A).get(B) + 1); // add 1 to d values
+                    }
+                    if (d.get(A).get(B) > kappa || i == path.length - 1) {
+                        if (!A.equals(B)) {
+                            nodesSeen.clear();
+                            for (int j = starts.get(A).get(B); j <= i - d.get(A).get(B); j++) {
+                                if (find(path[j]) == A || find(path[j]) == B) {
+                                    nodesSeen.add(path[j]);
+                                }
+                            }
+                            if (nodesSeen.size() > alpha * (size[A] + size[B])) {
+                                pairSup.putIfAbsent(A, new ConcurrentHashMap<>());
+                                pairSup.get(A).putIfAbsent(B, new AtomicInteger(0));
+                                pairSup.get(A).get(B).incrementAndGet();
+                            }
+                        }
+                        ABremove.putIfAbsent(A, new TreeSet<>());
+                        ABremove.get(A).add(B);
                     }
                 }
-                if (nodesSeen.size() > alpha * (size[a] + size[b])) {
-                    pairSup.putIfAbsent(Math.min(a, b), new ConcurrentHashMap<>());
-                    pairSup.get(Math.min(a, b)).putIfAbsent(Math.max(a, b), new AtomicInteger(0));
-                    pairSup.get(Math.min(a, b)).get(Math.max(a, b)).incrementAndGet();
+            }
+            for (Integer A : ABremove.keySet()) {
+                for (Integer B : ABremove.get(A)) {
+                    d.get(A).remove(B);
+                    starts.get(A).remove(B);
                 }
-                start = -1;
+                if (d.get(A).keySet().isEmpty()) {
+                    d.remove(A);
+                }
+                if (starts.get(A).keySet().isEmpty()) {
+                    starts.remove(A);
+                }
             }
         }
     }
 
-    static void processPathPairsNew(int s) {
-        int[] path = seqPath[s];
-        //int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
-        HashMap<Integer, HashSet<Integer>> pairs = new HashMap<>();
-        for (int i = 0; i < path.length - (kappa + 1); i++) {
-            for (int j = i + 1; j <= i + kappa + 1; j++) {
-                pairs.putIfAbsent(Math.min(find(path[i]), find(path[j])), new HashSet<>());
-                pairs.get(Math.min(find(path[i]), find(path[j]))).add(Math.max(find(path[i]), find(path[j])));
-            }
-        }
-        for (Integer A : pairs.keySet()) {
-            for (Integer B : pairs.get(A)) {
-                processPathPair(s, A, B);
-            }
-        }
-    }
-
-    static void processPathPairs(int s) {
-        int[] path = seqPath[s];
-        int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
-        TreeSet<Integer> nodesSeen = new TreeSet<>();
-        for (int i = 0; i <= path.length; i++) {
-            if (i < path.length) {
-                nextSet = find(path[i]);
-            }
-            if (a == -1) {
-                a = nextSet;
-                aStart = i;
-            } else if (b == -1) {
-                b = nextSet;
-                bStart = i;
-            }
-            if ((nextSet != a && nextSet != b) || i == path.length) {
-                nodesSeen.clear();
-                for (int j = aStart; j < i; j++) {
-                    nodesSeen.add(path[j]);
-                }
-                if (nodesSeen.size() > alpha * (size[a] + size[b])) {
-                    pairSup.putIfAbsent(Math.min(a, b), new ConcurrentHashMap<>());
-                    pairSup.get(Math.min(a, b)).putIfAbsent(Math.max(a, b), new AtomicInteger(0));
-                    pairSup.get(Math.min(a, b)).get(Math.max(a, b)).incrementAndGet();
-                }
-                a = b;
-                aStart = bStart;
-                b = nextSet;
-                bStart = i;
-            }
-        }
-    }
-
+//    static void processPathPairs(int s) {
+//        int[] path = seqPath[s];
+//        int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
+//        TreeSet<Integer> nodesSeen = new TreeSet<>();
+//        for (int i = 0; i <= path.length; i++) {
+//            if (i < path.length) {
+//                nextSet = find(path[i]);
+//            }
+//            if (a == -1) {
+//                a = nextSet;
+//                aStart = i;
+//            } else if (b == -1) {
+//                b = nextSet;
+//                bStart = i;
+//            }
+//            if ((nextSet != a && nextSet != b) || i == path.length) {
+//                nodesSeen.clear();
+//                for (int j = aStart; j < i; j++) {
+//                    nodesSeen.add(path[j]);
+//                }
+//                if (nodesSeen.size() > alpha * (size[a] + size[b])) {
+//                    pairSup.putIfAbsent(Math.min(a, b), new ConcurrentHashMap<>());
+//                    pairSup.get(Math.min(a, b)).putIfAbsent(Math.max(a, b), new AtomicInteger(0));
+//                    pairSup.get(Math.min(a, b)).get(Math.max(a, b)).incrementAndGet();
+//                }
+//                a = b;
+//                aStart = bStart;
+//                b = nextSet;
+//                bStart = i;
+//            }
+//        }
+//    }
     static void clusterNodes() {
         pairSup = new ConcurrentHashMap<>();
         int numMerges = 0;
         do {
             pairSup.clear();
             IntStream.range(0, numPaths).parallel().forEach(s -> {
-                processPathPairsNew(s);
-            });
+                processPathPairs2(s);
+//                if (s % 5000 == 0) {
+//                    System.out.println("processed path " + s);
+//                }
+            }
+            );
+//            System.out.println("processed all paths");
             ArrayList<Edge> merges = new ArrayList<>();
             for (Integer A : pairSup.keySet()) {
                 for (Integer B : pairSup.get(A).keySet()) {
@@ -271,73 +343,153 @@ public class FindFRs3 {
         } while (numMerges > 0);
     }
 
-    static void processPathSupport(int s) {
+    static void processPathSupport2(int s) {
         int[] path = seqPath[s];
-        int a = -1, aStart = 0, nextSet = -1;
+        HashMap<Integer, Integer> starts = new HashMap<>();
+        HashMap<Integer, Integer> d = new HashMap<>(); // distance back to {a}
         TreeSet<Integer> nodesSeen = new TreeSet<>();
-        for (int i = 0; i <= path.length; i++) {
-            if (i < path.length) {
-                nextSet = find(path[i]);
+        TreeSet<Integer> Aremove = new TreeSet<>();
+        for (int i = 0; i < path.length; i++) {
+            int nextSet = find(path[i]);
+            if (!d.containsKey(nextSet)) {
+                starts.putIfAbsent(nextSet, i);
             }
-            if (a == -1) {
-                a = nextSet;
-                aStart = i;
+            d.put(nextSet, 0);
+            Aremove.clear();
+            for (Integer A : d.keySet()) {
+                if (!A.equals(nextSet)) {
+                    d.put(A, d.get(A) + 1); // add 1 to d values
+                }
+                if (d.get(A) > kappa || i == path.length - 1) {
+                    nodesSeen.clear();
+                    for (int j = starts.get(A); j <= i - d.get(A); j++) {
+                        if (find(path[j]) == A) {
+                            nodesSeen.add(path[j]);
+                        }
+                    }
+                    if (nodesSeen.size() > alpha * (size[A])) {
+                        sup.putIfAbsent(A, new AtomicInteger(0));
+                        sup.get(A).incrementAndGet();
+                        len.putIfAbsent(A, new AtomicInteger(0));
+                        len.get(A).addAndGet(getStart(s, i) - getStart(s, starts.get(A)));
+                    }
+                    Aremove.add(A);
+                }
             }
-            if (nextSet != a || i == path.length) {
-                nodesSeen.clear();
-                for (int j = aStart; j < i; j++) {
-                    nodesSeen.add(path[j]);
-                }
-                if (nodesSeen.size() > alpha * size[a]) {
-                    sup.putIfAbsent(a, new AtomicInteger(0));
-                    sup.get(a).incrementAndGet();
-                    len.putIfAbsent(a, new AtomicInteger(0));
-                    len.get(a).addAndGet(getStart(s, i) - getStart(s, aStart));
-                }
-                a = nextSet;
-                aStart = i;
+            for (Integer A : Aremove) {
+                d.remove(A);
+                starts.remove(A);
             }
         }
     }
 
-    static void processPathFindFRSupport(int s) {
+//    static void processPathSupport(int s) {
+//        int[] path = seqPath[s];
+//        int a = -1, aStart = 0, nextSet = -1;
+//        TreeSet<Integer> nodesSeen = new TreeSet<>();
+//        for (int i = 0; i <= path.length; i++) {
+//            if (i < path.length) {
+//                nextSet = find(path[i]);
+//            }
+//            if (a == -1) {
+//                a = nextSet;
+//                aStart = i;
+//            }
+//            if (nextSet != a || i == path.length) {
+//                nodesSeen.clear();
+//                for (int j = aStart; j < i; j++) {
+//                    nodesSeen.add(path[j]);
+//                }
+//                if (nodesSeen.size() > alpha * size[a]) {
+//                    sup.putIfAbsent(a, new AtomicInteger(0));
+//                    sup.get(a).incrementAndGet();
+//                    len.putIfAbsent(a, new AtomicInteger(0));
+//                    len.get(a).addAndGet(getStart(s, i) - getStart(s, aStart));
+//                }
+//                a = nextSet;
+//                aStart = i;
+//            }
+//        }
+//    }
+    static void processPathFindFRSupport2(int s) {
         int[] path = seqPath[s];
-        int a = -1, aStart = 0, nextSet = -1;
+        HashMap<Integer, Integer> starts = new HashMap<>();
+        HashMap<Integer, Integer> d = new HashMap<>(); // distance back to {a}
         TreeSet<Integer> nodesSeen = new TreeSet<>();
-        for (int i = 0; i <= path.length; i++) {
-            if (i < path.length) {
-                nextSet = find(path[i]);
+        TreeSet<Integer> Aremove = new TreeSet<>();
+        for (int i = 0; i < path.length; i++) {
+            int nextSet = find(path[i]);
+            if (!d.containsKey(nextSet)) {
+                starts.putIfAbsent(nextSet, i);
             }
-            if (a == -1) {
-                a = nextSet;
-                aStart = i;
-            }
-            if ((nextSet != a || i == path.length)) {
-                if (frSet.contains(a)) {
+            d.put(nextSet, 0);
+            Aremove.clear();
+            for (Integer A : d.keySet()) {
+                if (!A.equals(nextSet)) {
+                    d.put(A, d.get(A) + 1); // add 1 to d values
+                }
+                if (d.get(A) > kappa || i == path.length - 1) {
                     nodesSeen.clear();
-                    for (int j = aStart; j < i; j++) {
-                        nodesSeen.add(path[j]);
+                    for (int j = starts.get(A); j <= i - d.get(A); j++) {
+                        if (find(path[j]) == A) {
+                            nodesSeen.add(path[j]);
+                        }
                     }
-                    if (nodesSeen.size() > alpha * size[a]) {
-                        frSupPaths.putIfAbsent(a, new ConcurrentLinkedQueue<>());
+                    if (nodesSeen.size() > alpha * (size[A])) {
+                        frSupPaths.putIfAbsent(A, new ConcurrentLinkedQueue<>());
                         int[] subpath = new int[3];
                         subpath[0] = s;
-                        subpath[1] = aStart;
+                        subpath[1] = starts.get(A);
                         subpath[2] = i;
-                        frSupPaths.get(a).add(subpath);
+                        frSupPaths.get(A).add(subpath);
                     }
+                    Aremove.add(A);
                 }
-                a = nextSet;
-                aStart = i;
+            }
+            for (Integer A : Aremove) {
+                d.remove(A);
+                starts.remove(A);
             }
         }
     }
 
+//    static void processPathFindFRSupport(int s) {
+//        int[] path = seqPath[s];
+//        int a = -1, aStart = 0, nextSet = -1;
+//        TreeSet<Integer> nodesSeen = new TreeSet<>();
+//        for (int i = 0; i <= path.length; i++) {
+//            if (i < path.length) {
+//                nextSet = find(path[i]);
+//            }
+//            if (a == -1) {
+//                a = nextSet;
+//                aStart = i;
+//            }
+//            if ((nextSet != a || i == path.length)) {
+//                if (frSet.contains(a)) {
+//                    nodesSeen.clear();
+//                    for (int j = aStart; j < i; j++) {
+//                        nodesSeen.add(path[j]);
+//                    }
+//                    if (nodesSeen.size() > alpha * size[a]) {
+//                        frSupPaths.putIfAbsent(a, new ConcurrentLinkedQueue<>());
+//                        int[] subpath = new int[3];
+//                        subpath[0] = s;
+//                        subpath[1] = aStart;
+//                        subpath[2] = i;
+//                        frSupPaths.get(a).add(subpath);
+//                    }
+//                }
+//                a = nextSet;
+//                aStart = i;
+//            }
+//        }
+//    }
     static void findFRs() {
         sup = new ConcurrentHashMap<>();
         len = new ConcurrentHashMap<>();
         IntStream.range(0, numPaths).parallel().forEach(s -> {
-            processPathSupport(s);
+            processPathSupport2(s);
         });
         ArrayList<FR> frList = new ArrayList<>();
         frSet = new TreeSet<>();
@@ -355,7 +507,7 @@ public class FindFRs3 {
         Arrays.sort(frsFound);
         frSupPaths = new ConcurrentHashMap<>();
         IntStream.range(0, numPaths).parallel().forEach(s -> {
-            processPathFindFRSupport(s);
+            processPathFindFRSupport2(s);
         });
         frSet.clear();
     }
@@ -519,6 +671,10 @@ public class FindFRs3 {
         minLO.setRequired(false);
         options.addOption(minLO);
 
+        Option kappaO = new Option("ka", "kappa", true, "kappa parameter (default = 0)");
+        kappaO.setRequired(false);
+        options.addOption(kappaO);
+
         HelpFormatter formatter = new HelpFormatter();
         try {
             CommandLineParser parser = new DefaultParser();
@@ -533,6 +689,9 @@ public class FindFRs3 {
             minSup = Integer.parseInt(cmd.getOptionValue("minsup"));
             if (cmd.hasOption("minlen")) {
                 minAvgLen = Integer.parseInt(cmd.getOptionValue("minlen"));
+            }
+            if (cmd.hasOption("kappa")) {
+                kappa = Integer.parseInt(cmd.getOptionValue("kappa"));
             }
 
             readSeg();
