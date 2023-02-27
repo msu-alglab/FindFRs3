@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,7 +30,7 @@ public class FindFRs3 {
     static HashMap<Integer, Integer> nodeIDtoIndex;
     static int numNodes = 0;
     static int[] nodeLength;
-    //static int[] nodetoNodeID;
+    static int[] indtoNodeID;
 
     static int numPaths = 0;
     static String[] seqName;
@@ -91,13 +90,13 @@ public class FindFRs3 {
             System.out.println(ex);
         }
         nodeLength = new int[numNodes];
-        //nodetoNodeID = new int[numNodes];
+        indtoNodeID = new int[numNodes];
         parent = new int[numNodes];
         size = new int[numNodes];
 
         for (int i = 0; i < numNodes; i++) {
             nodeLength[i] = nodeIDtoLength.get(indextoNodeID.get(i));
-            //nodetoNodeID[i] = indextoNodeID.get(i);
+            indtoNodeID[i] = indextoNodeID.get(i);
             parent[i] = i;
             size[i] = 1;
         }
@@ -509,7 +508,7 @@ public class FindFRs3 {
         IntStream.range(0, numPaths).parallel().forEach(s -> {
             processPathFindFRSupport2(s);
         });
-        frSet.clear();
+        //frSet.clear();
     }
 
     static void findFRVariants() {
@@ -615,31 +614,57 @@ public class FindFRs3 {
         }
     }
 
-//    static void outputFRVariants() {
-//        System.out.println("writing FR variants file");
-//        try {
-//            BufferedWriter frvOut = new BufferedWriter(new FileWriter(bedFile + ".frv"));
-//            for (int fr = 0; fr < frVarSup.length; fr++) {
-//                for (int v = 0; v < frVarSup[fr].length; v++) {
-//                    int path = frVarSup[fr][v].subpaths[0][0];
-//
-//                    frvOut.write("fr" + fr + ":" + v + "\t");
-//                    for (int i = frVarSup[fr][v].subpaths[0][1]; i < frVarSup[fr][v].subpaths[0][2]; i++) {
-//                        char strand = '-';
-//                        if (seqStrand[path][i]) {
-//                            strand = '+';
-//                        }
-//                        frvOut.write(" " + Integer.toUnsignedString(nodetoNodeID[seqPath[path][i]]) + strand);
-//                    }
-//                    frvOut.write("\n");
-//                }
-//
-//            }
-//            frvOut.close();
-//        } catch (IOException ex) {
-//            ex.printStackTrace();
-//        }
-//    }
+    static void outputFRVariants() {
+        System.out.println("writing FR variants file");
+        try {
+            BufferedWriter frvOut = new BufferedWriter(new FileWriter(bedFile + ".frv"));
+            for (int fr = 0; fr < frVarSup.length; fr++) {
+                for (int v = 0; v < frVarSup[fr].length; v++) {
+                    int path = frVarSup[fr][v].subpaths[0][0];
+
+                    frvOut.write("fr" + fr + ":" + v + "\t");
+                    for (int i = frVarSup[fr][v].subpaths[0][1]; i < frVarSup[fr][v].subpaths[0][2]; i++) {
+                        char strand = '-';
+                        if (seqStrand[path][i]) {
+                            strand = '+';
+                        }
+                        frvOut.write(" " + Integer.toUnsignedString(indtoNodeID[seqPath[path][i]]) + strand);
+                    }
+                    frvOut.write("\n");
+                }
+
+            }
+            frvOut.close();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    static void outputFRs() {
+        System.out.println("writing FRs file");
+        TreeMap<Integer, TreeSet<Integer>> frNodes = new TreeMap();
+        for (int i = 0; i < numNodes; i++) {
+            int clust = find(i);
+            if (frSet.contains(clust)) {
+                frNodes.putIfAbsent(clust, new TreeSet());
+                frNodes.get(clust).add(i);
+            }
+        }
+        try {
+            BufferedWriter frsOut = new BufferedWriter(new FileWriter(bedFile + ".frs"));
+            for (Integer fr : frNodes.keySet()) {
+                frsOut.write("fr" + fr + ":" + "\t");
+                for (Integer i : frNodes.get(fr)) {
+                    frsOut.write(" " + Integer.toUnsignedString(indtoNodeID[i]));
+                }
+                frsOut.write("\n");
+            }
+            frsOut.close();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+
     public static void main(String[] args) {
         Options options = new Options();
 
@@ -702,8 +727,9 @@ public class FindFRs3 {
             clusterNodes();
             findFRs();
             findFRVariants();
+            outputFRs();
             outputBED();
-            //outputFRVariants();
+            outputFRVariants();
 
         } catch (ParseException e) {
             System.out.println(e.getMessage());
