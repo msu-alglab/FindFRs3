@@ -546,7 +546,7 @@ public class FindFRs3 {
             Arrays.sort(frVarSup[frNum]);
             frNum++;
         }
-        frSet.clear();
+        //frSet.clear();
         frSupPaths.clear();
     }
 
