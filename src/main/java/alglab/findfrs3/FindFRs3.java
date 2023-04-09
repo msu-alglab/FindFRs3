@@ -626,7 +626,7 @@ public class FindFRs3 {
                     int path = frVarSup[fr][v].subpaths[0][0];
 
                     frvOut.write("fr" + fr + ":" + v + "\t");
-                    for (int i = frVarSup[fr][v].subpaths[0][1]; i < frVarSup[fr][v].subpaths[0][2]; i++) {
+                    for (int i = frVarSup[fr][v].subpaths[0][1]; i <= frVarSup[fr][v].subpaths[0][2]; i++) {
                         char strand = '-';
                         if (seqStrand[path][i]) {
                             strand = '+';
