@@ -439,7 +439,7 @@ public class FindFRs3 {
                         int[] subpath = new int[3];
                         subpath[0] = s;
                         subpath[1] = starts.get(A);
-                        subpath[2] = i;
+                        subpath[2] = i - d.get(A); // should be the last portion of the path
                         frSupPaths.get(A).add(subpath);
                     }
                     Aremove.add(A);
@@ -599,7 +599,10 @@ public class FindFRs3 {
                         //int start = seqStarts[path][frVarSup[fr][v].subpaths[i][1]];
                         int start = getStart(path, frVarSup[fr][v].subpaths[i][1]);
                         //int stop = seqStarts[path][frVarSup[fr][v].subpaths[i][2] - 1] + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2] - 1]];
-                        int stop = getStart(path, frVarSup[fr][v].subpaths[i][2] - 1) + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2] - 1]];
+                        
+                        // removed -1 below; subpaths[i][2] should be the final 
+                        int stop = getStart(path, frVarSup[fr][v].subpaths[i][2]) + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2]]];
+                        
                         bedOut.write(seqName[path] // chrom
                                 + "\t" + start // chromStart (starts with 0)
                                 + "\t" + stop // chromEnd
@@ -733,7 +736,7 @@ public class FindFRs3 {
 
         } catch (ParseException e) {
             System.out.println(e.getMessage());
-            formatter.printHelp("FindFRs3", options);
+            formatter.printHelp("FindFRs3 v1.01", options);
             System.exit(0);
         }
 
