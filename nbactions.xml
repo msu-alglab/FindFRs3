@@ -12,7 +12,7 @@
             <properties>
                 <exec.vmArgs>-Xmx10g</exec.vmArgs>
                 <exec.args>${exec.vmArgs} -classpath %classpath ${exec.mainClass} ${exec.appArgs}</exec.args>
-                <exec.appArgs>-a 0.9 -k 31 -m 30 -l 500 -ka 0 -n yeast.k31.gfa3.cf_seg -p yeast.k31.gfa3.cf_seq -b yeast.k31.a0.9m30.bed</exec.appArgs>
+                <exec.appArgs>-a 0.9 -k 31 -m 30 -l 500 -ka 3 -n yeast.k31.gfa3.cf_seg -p yeast.k31.gfa3.cf_seq -b yeast.k31.a0.9m30.bed</exec.appArgs>
                 <exec.mainClass>alglab.findfrs3.FindFRs3</exec.mainClass>
                 <exec.executable>java</exec.executable>
                 <exec.workingdir>/Users/bmumey/test</exec.workingdir>
@@ -30,7 +30,7 @@
             <properties>
                 <exec.vmArgs>-Xmx10g -agentlib:jdwp=transport=dt_socket,server=n,address=${jpda.address}</exec.vmArgs>
                 <exec.args>${exec.vmArgs} -classpath %classpath ${exec.mainClass} ${exec.appArgs}</exec.args>
-                <exec.appArgs>-a 0.9 -k 31 -m 30 -l 500 -ka 0 -n yeast.k31.gfa3.cf_seg -p yeast.k31.gfa3.cf_seq -b yeast.k31.a0.9m30.bed</exec.appArgs>
+                <exec.appArgs>-a 0.9 -k 31 -m 30 -l 500 -ka 3 -n yeast.k31.gfa3.cf_seg -p yeast.k31.gfa3.cf_seq -b yeast.k31.a0.9m30.bed</exec.appArgs>
                 <exec.mainClass>alglab.findfrs3.FindFRs3</exec.mainClass>
                 <exec.executable>java</exec.executable>
                 <jpda.listen>true</jpda.listen>
@@ -52,7 +52,7 @@
                 <exec.mainClass>alglab.findfrs3.FindFRs3</exec.mainClass>
                 <exec.executable>java</exec.executable>
                 <exec.workingdir>/Users/bmumey/test</exec.workingdir>
-                <exec.appArgs>-a 0.9 -k 31 -m 30 -l 500 -ka 0 -n yeast.k31.gfa3.cf_seg -p yeast.k31.gfa3.cf_seq -b yeast.k31.a0.9m30.bed</exec.appArgs>
+                <exec.appArgs>-a 0.9 -k 31 -m 30 -l 500 -ka 3 -n yeast.k31.gfa3.cf_seg -p yeast.k31.gfa3.cf_seq -b yeast.k31.a0.9m30.bed</exec.appArgs>
             </properties>
         </action>
     </actions>

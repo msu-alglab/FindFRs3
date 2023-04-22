@@ -19,9 +19,9 @@ import org.apache.commons.cli.*;
 public class FindFRs3 {
 
     static int k = 31;
-    static double alpha = 0.5;
+    static double alpha = 0.9;
     static int kappa = 0;
-    static int minSup = 20;
+    static int minSup = 1;
     static int minAvgLen = 0;
     static String segFile = "";
     static String seqFile = "";
@@ -234,7 +234,8 @@ public class FindFRs3 {
                     } else {
                         d.get(A).put(B, d.get(A).get(B) + 1); // add 1 to d values
                     }
-                    if (d.get(A).get(B) > kappa || i == path.length - 1) {
+                    //if (d.get(A).get(B) > kappa || i == path.length - 1) {
+                    if (getStart(s, starts.get(A).get(B) + d.get(A).get(B)) - getStart(s, starts.get(A).get(B)) > kappa || i == path.length - 1) {
                         if (!A.equals(B)) {
                             nodesSeen.clear();
                             for (int j = starts.get(A).get(B); j <= i - d.get(A).get(B); j++) {
@@ -359,7 +360,8 @@ public class FindFRs3 {
                 if (!A.equals(nextSet)) {
                     d.put(A, d.get(A) + 1); // add 1 to d values
                 }
-                if (d.get(A) > kappa || i == path.length - 1) {
+                //if (d.get(A) > kappa || i == path.length - 1) {
+                if (getStart(s, starts.get(A) + d.get(A)) - getStart(s, starts.get(A)) > kappa || i == path.length - 1) {
                     nodesSeen.clear();
                     for (int j = starts.get(A); j <= i - d.get(A); j++) {
                         if (find(path[j]) == A) {
@@ -427,7 +429,8 @@ public class FindFRs3 {
                 if (!A.equals(nextSet)) {
                     d.put(A, d.get(A) + 1); // add 1 to d values
                 }
-                if (d.get(A) > kappa || i == path.length - 1) {
+                //if (d.get(A) > kappa || i == path.length - 1) {
+                if (getStart(s, starts.get(A) + d.get(A)) - getStart(s, starts.get(A)) > kappa || i == path.length - 1) {
                     nodesSeen.clear();
                     for (int j = starts.get(A); j <= i - d.get(A); j++) {
                         if (find(path[j]) == A) {
@@ -599,10 +602,10 @@ public class FindFRs3 {
                         //int start = seqStarts[path][frVarSup[fr][v].subpaths[i][1]];
                         int start = getStart(path, frVarSup[fr][v].subpaths[i][1]);
                         //int stop = seqStarts[path][frVarSup[fr][v].subpaths[i][2] - 1] + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2] - 1]];
-                        
+
                         // removed -1 below; subpaths[i][2] should be the final 
                         int stop = getStart(path, frVarSup[fr][v].subpaths[i][2]) + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2]]];
-                        
+
                         bedOut.write(seqName[path] // chrom
                                 + "\t" + start // chromStart (starts with 0)
                                 + "\t" + stop // chromEnd
@@ -695,11 +698,11 @@ public class FindFRs3 {
         minSO.setRequired(true);
         options.addOption(minSO);
 
-        Option minLO = new Option("l", "minlen", true, "min avg support length parameter (bp)");
+        Option minLO = new Option("l", "minlen", true, "min avg support length parameter (bp, default = 0)");
         minLO.setRequired(false);
         options.addOption(minLO);
 
-        Option kappaO = new Option("ka", "kappa", true, "kappa parameter (default = 0)");
+        Option kappaO = new Option("ka", "kappa", true, "kappa parameter (bp, default = 0)");
         kappaO.setRequired(false);
         options.addOption(kappaO);
 
@@ -736,7 +739,7 @@ public class FindFRs3 {
 
         } catch (ParseException e) {
             System.out.println(e.getMessage());
-            formatter.printHelp("FindFRs3 v1.01", options);
+            formatter.printHelp("FindFRs3 v1.02", options);
             System.exit(0);
         }
 
