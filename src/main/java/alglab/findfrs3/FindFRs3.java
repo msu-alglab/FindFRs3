@@ -234,8 +234,8 @@ public class FindFRs3 {
                     } else {
                         d.get(A).put(B, d.get(A).get(B) + 1); // add 1 to d values
                     }
-                    //if (d.get(A).get(B) > kappa || i == path.length - 1) {
-                    if (getStart(s, starts.get(A).get(B) + d.get(A).get(B)) - getStart(s, starts.get(A).get(B)) > kappa || i == path.length - 1) {
+                    if (d.get(A).get(B) > kappa || i == path.length - 1) {
+                    //if (getStart(s, starts.get(A).get(B) + d.get(A).get(B)) - getStart(s, starts.get(A).get(B)) > kappa || i == path.length - 1) {
                         if (!A.equals(B)) {
                             nodesSeen.clear();
                             for (int j = starts.get(A).get(B); j <= i - d.get(A).get(B); j++) {
@@ -360,8 +360,8 @@ public class FindFRs3 {
                 if (!A.equals(nextSet)) {
                     d.put(A, d.get(A) + 1); // add 1 to d values
                 }
-                //if (d.get(A) > kappa || i == path.length - 1) {
-                if (getStart(s, starts.get(A) + d.get(A)) - getStart(s, starts.get(A)) > kappa || i == path.length - 1) {
+                if (d.get(A) > kappa || i == path.length - 1) {
+                //if (getStart(s, starts.get(A) + d.get(A)) - getStart(s, starts.get(A)) > kappa || i == path.length - 1) {
                     nodesSeen.clear();
                     for (int j = starts.get(A); j <= i - d.get(A); j++) {
                         if (find(path[j]) == A) {
@@ -429,8 +429,8 @@ public class FindFRs3 {
                 if (!A.equals(nextSet)) {
                     d.put(A, d.get(A) + 1); // add 1 to d values
                 }
-                //if (d.get(A) > kappa || i == path.length - 1) {
-                if (getStart(s, starts.get(A) + d.get(A)) - getStart(s, starts.get(A)) > kappa || i == path.length - 1) {
+                if (d.get(A) > kappa || i == path.length - 1) {
+                //if (getStart(s, starts.get(A) + d.get(A)) - getStart(s, starts.get(A)) > kappa || i == path.length - 1) {
                     nodesSeen.clear();
                     for (int j = starts.get(A); j <= i - d.get(A); j++) {
                         if (find(path[j]) == A) {
@@ -702,7 +702,7 @@ public class FindFRs3 {
         minLO.setRequired(false);
         options.addOption(minLO);
 
-        Option kappaO = new Option("ka", "kappa", true, "kappa parameter (bp, default = 0)");
+        Option kappaO = new Option("ka", "kappa", true, "kappa parameter (nodes, default = 0)");
         kappaO.setRequired(false);
         options.addOption(kappaO);
 
@@ -739,7 +739,7 @@ public class FindFRs3 {
 
         } catch (ParseException e) {
             System.out.println(e.getMessage());
-            formatter.printHelp("FindFRs3 v1.02", options);
+            formatter.printHelp("FindFRs3 v1.03", options);
             System.exit(0);
         }
 
