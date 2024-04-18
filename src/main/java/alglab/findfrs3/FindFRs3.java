@@ -148,56 +148,6 @@ public class FindFRs3 {
         }
     }
 
-//    static void processPathPair(int s, int a, int b) {
-//        int[] path = seqPath[s];
-//        int nextSet = -1, start = -1;
-//        int d = 0; // distance back to {a,b}
-//        TreeSet<Integer> nodesSeen = new TreeSet<>();
-//
-//        for (int i = 0; i <= path.length; i++) {
-//            if (i < path.length) {
-//                nextSet = find(path[i]);
-//            }
-//            if (nextSet == a || nextSet == b) {
-//                d = 0;
-//                if (start == -1) {
-//                    start = i;
-//                }
-//            } else {
-//                d++;
-//            }
-//            if (start != -1 && (d > kappa || i == path.length)) {
-//                nodesSeen.clear();
-//                for (int j = start; j < i - d; j++) {
-//                    if (find(path[j]) == a || find(path[j]) == b) {
-//                        nodesSeen.add(path[j]);
-//                    }
-//                }
-//                if (nodesSeen.size() > alpha * (size[a] + size[b])) {
-//                    pairSup.putIfAbsent(Math.min(a, b), new ConcurrentHashMap<>());
-//                    pairSup.get(Math.min(a, b)).putIfAbsent(Math.max(a, b), new AtomicInteger(0));
-//                    pairSup.get(Math.min(a, b)).get(Math.max(a, b)).incrementAndGet();
-//                }
-//                start = -1;
-//            }
-//        }
-//    }
-//    static void processPathPairsNew(int s) {
-//        int[] path = seqPath[s];
-//        //int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
-//        HashMap<Integer, HashSet<Integer>> pairs = new HashMap<>();
-//        for (int i = 0; i < path.length - (kappa + 1); i++) {
-//            for (int j = i + 1; j <= i + kappa + 1; j++) {
-//                pairs.putIfAbsent(Math.min(find(path[i]), find(path[j])), new HashSet<>());
-//                pairs.get(Math.min(find(path[i]), find(path[j]))).add(Math.max(find(path[i]), find(path[j])));
-//            }
-//        }
-//        for (Integer A : pairs.keySet()) {
-//            for (Integer B : pairs.get(A)) {
-//                processPathPair(s, A, B);
-//            }
-//        }
-//    }
     static void processPathPairs2(int s) {
         int[] path = seqPath[s];
         HashMap<Integer, HashMap<Integer, Integer>> starts = new HashMap<>();
@@ -235,7 +185,7 @@ public class FindFRs3 {
                         d.get(A).put(B, d.get(A).get(B) + 1); // add 1 to d values
                     }
                     if (d.get(A).get(B) > kappa || i == path.length - 1) {
-                    //if (getStart(s, starts.get(A).get(B) + d.get(A).get(B)) - getStart(s, starts.get(A).get(B)) > kappa || i == path.length - 1) {
+                        //if (getStart(s, starts.get(A).get(B) + d.get(A).get(B)) - getStart(s, starts.get(A).get(B)) > kappa || i == path.length - 1) {
                         if (!A.equals(B)) {
                             nodesSeen.clear();
                             for (int j = starts.get(A).get(B); j <= i - d.get(A).get(B); j++) {
@@ -269,38 +219,6 @@ public class FindFRs3 {
         }
     }
 
-//    static void processPathPairs(int s) {
-//        int[] path = seqPath[s];
-//        int a = -1, b = -1, aStart = 0, bStart = 0, nextSet = -1;
-//        TreeSet<Integer> nodesSeen = new TreeSet<>();
-//        for (int i = 0; i <= path.length; i++) {
-//            if (i < path.length) {
-//                nextSet = find(path[i]);
-//            }
-//            if (a == -1) {
-//                a = nextSet;
-//                aStart = i;
-//            } else if (b == -1) {
-//                b = nextSet;
-//                bStart = i;
-//            }
-//            if ((nextSet != a && nextSet != b) || i == path.length) {
-//                nodesSeen.clear();
-//                for (int j = aStart; j < i; j++) {
-//                    nodesSeen.add(path[j]);
-//                }
-//                if (nodesSeen.size() > alpha * (size[a] + size[b])) {
-//                    pairSup.putIfAbsent(Math.min(a, b), new ConcurrentHashMap<>());
-//                    pairSup.get(Math.min(a, b)).putIfAbsent(Math.max(a, b), new AtomicInteger(0));
-//                    pairSup.get(Math.min(a, b)).get(Math.max(a, b)).incrementAndGet();
-//                }
-//                a = b;
-//                aStart = bStart;
-//                b = nextSet;
-//                bStart = i;
-//            }
-//        }
-//    }
     static void clusterNodes() {
         pairSup = new ConcurrentHashMap<>();
         int numMerges = 0;
@@ -308,12 +226,8 @@ public class FindFRs3 {
             pairSup.clear();
             IntStream.range(0, numPaths).parallel().forEach(s -> {
                 processPathPairs2(s);
-//                if (s % 5000 == 0) {
-//                    System.out.println("processed path " + s);
-//                }
-            }
-            );
-//            System.out.println("processed all paths");
+            });
+
             ArrayList<Edge> merges = new ArrayList<>();
             for (Integer A : pairSup.keySet()) {
                 for (Integer B : pairSup.get(A).keySet()) {
@@ -361,7 +275,6 @@ public class FindFRs3 {
                     d.put(A, d.get(A) + 1); // add 1 to d values
                 }
                 if (d.get(A) > kappa || i == path.length - 1) {
-                //if (getStart(s, starts.get(A) + d.get(A)) - getStart(s, starts.get(A)) > kappa || i == path.length - 1) {
                     nodesSeen.clear();
                     for (int j = starts.get(A); j <= i - d.get(A); j++) {
                         if (find(path[j]) == A) {
@@ -372,7 +285,10 @@ public class FindFRs3 {
                         sup.putIfAbsent(A, new AtomicInteger(0));
                         sup.get(A).incrementAndGet();
                         len.putIfAbsent(A, new AtomicInteger(0));
-                        len.get(A).addAndGet(getStart(s, i) - getStart(s, starts.get(A)));
+
+                        int start = getStart(s, starts.get(A));
+                        int stop = getStart(s, i - d.get(A)) + nodeLength[path[i - d.get(A)]];
+                        len.get(A).addAndGet(stop - start);
                     }
                     Aremove.add(A);
                 }
@@ -384,34 +300,6 @@ public class FindFRs3 {
         }
     }
 
-//    static void processPathSupport(int s) {
-//        int[] path = seqPath[s];
-//        int a = -1, aStart = 0, nextSet = -1;
-//        TreeSet<Integer> nodesSeen = new TreeSet<>();
-//        for (int i = 0; i <= path.length; i++) {
-//            if (i < path.length) {
-//                nextSet = find(path[i]);
-//            }
-//            if (a == -1) {
-//                a = nextSet;
-//                aStart = i;
-//            }
-//            if (nextSet != a || i == path.length) {
-//                nodesSeen.clear();
-//                for (int j = aStart; j < i; j++) {
-//                    nodesSeen.add(path[j]);
-//                }
-//                if (nodesSeen.size() > alpha * size[a]) {
-//                    sup.putIfAbsent(a, new AtomicInteger(0));
-//                    sup.get(a).incrementAndGet();
-//                    len.putIfAbsent(a, new AtomicInteger(0));
-//                    len.get(a).addAndGet(getStart(s, i) - getStart(s, aStart));
-//                }
-//                a = nextSet;
-//                aStart = i;
-//            }
-//        }
-//    }
     static void processPathFindFRSupport2(int s) {
         int[] path = seqPath[s];
         HashMap<Integer, Integer> starts = new HashMap<>();
@@ -430,7 +318,6 @@ public class FindFRs3 {
                     d.put(A, d.get(A) + 1); // add 1 to d values
                 }
                 if (d.get(A) > kappa || i == path.length - 1) {
-                //if (getStart(s, starts.get(A) + d.get(A)) - getStart(s, starts.get(A)) > kappa || i == path.length - 1) {
                     nodesSeen.clear();
                     for (int j = starts.get(A); j <= i - d.get(A); j++) {
                         if (find(path[j]) == A) {
@@ -455,38 +342,6 @@ public class FindFRs3 {
         }
     }
 
-//    static void processPathFindFRSupport(int s) {
-//        int[] path = seqPath[s];
-//        int a = -1, aStart = 0, nextSet = -1;
-//        TreeSet<Integer> nodesSeen = new TreeSet<>();
-//        for (int i = 0; i <= path.length; i++) {
-//            if (i < path.length) {
-//                nextSet = find(path[i]);
-//            }
-//            if (a == -1) {
-//                a = nextSet;
-//                aStart = i;
-//            }
-//            if ((nextSet != a || i == path.length)) {
-//                if (frSet.contains(a)) {
-//                    nodesSeen.clear();
-//                    for (int j = aStart; j < i; j++) {
-//                        nodesSeen.add(path[j]);
-//                    }
-//                    if (nodesSeen.size() > alpha * size[a]) {
-//                        frSupPaths.putIfAbsent(a, new ConcurrentLinkedQueue<>());
-//                        int[] subpath = new int[3];
-//                        subpath[0] = s;
-//                        subpath[1] = aStart;
-//                        subpath[2] = i;
-//                        frSupPaths.get(a).add(subpath);
-//                    }
-//                }
-//                a = nextSet;
-//                aStart = i;
-//            }
-//        }
-//    }
     static void findFRs() {
         sup = new ConcurrentHashMap<>();
         len = new ConcurrentHashMap<>();
@@ -511,7 +366,6 @@ public class FindFRs3 {
         IntStream.range(0, numPaths).parallel().forEach(s -> {
             processPathFindFRSupport2(s);
         });
-        //frSet.clear();
     }
 
     static void findFRVariants() {
@@ -549,7 +403,6 @@ public class FindFRs3 {
             Arrays.sort(frVarSup[frNum]);
             frNum++;
         }
-        //frSet.clear();
         frSupPaths.clear();
     }
 
@@ -575,23 +428,10 @@ public class FindFRs3 {
             start += nodeLength[seqPath[s][i]] - (k - 1);
             i++;
         }
-//        if (start != seqStarts[s][index]) {
-//            System.out.println("here");
-//        }
         return start;
     }
 
     static void outputBED() {
-//        seqStarts = new int[numPaths][];
-//        for (int s = 0; s < numPaths; s++) {
-//            seqStarts[s] = new int[seqPath[s].length];
-//            int start = 0;
-//            for (int i = 0; i < seqPath[s].length; i++) {
-//                seqStarts[s][i] = start;
-//                start += nodeLength[seqPath[s][i]] - (k - 1);
-//            }
-//        }
-
         System.out.println("writing bed file");
         try {
             BufferedWriter bedOut = new BufferedWriter(new FileWriter(bedFile));
@@ -599,11 +439,7 @@ public class FindFRs3 {
                 for (int v = 0; v < frVarSup[fr].length; v++) {
                     for (int i = 0; i < frVarSup[fr][v].subpaths.length; i++) {
                         int path = frVarSup[fr][v].subpaths[i][0];
-                        //int start = seqStarts[path][frVarSup[fr][v].subpaths[i][1]];
                         int start = getStart(path, frVarSup[fr][v].subpaths[i][1]);
-                        //int stop = seqStarts[path][frVarSup[fr][v].subpaths[i][2] - 1] + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2] - 1]];
-
-                        // removed -1 below; subpaths[i][2] should be the final 
                         int stop = getStart(path, frVarSup[fr][v].subpaths[i][2]) + nodeLength[seqPath[path][frVarSup[fr][v].subpaths[i][2]]];
 
                         bedOut.write(seqName[path] // chrom
@@ -739,7 +575,7 @@ public class FindFRs3 {
 
         } catch (ParseException e) {
             System.out.println(e.getMessage());
-            formatter.printHelp("FindFRs3 v1.03", options);
+            formatter.printHelp("FindFRs3 v1.04", options);
             System.exit(0);
         }
 
